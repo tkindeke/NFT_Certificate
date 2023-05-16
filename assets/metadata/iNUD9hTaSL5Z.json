@@ -1,0 +1,20 @@
+{
+  "721": 
+  {
+    "c0f8644a01a6bf5db02f4afe30d604975e63dd274f1098a1738e561d": 
+    {
+      "Ketchiz": 
+      {
+        "name": "Shoe1",
+        "make": "Ketchi",
+        "color": "White",
+        "made_in":"DRC (Congo)",
+        "fabrication_date":"01-01-2020",
+        "serial_number": "iNUD9hTaSL5Z",
+        "blockchain_network":"Cardano",
+        "image": "ipfs://Qmde9YXKdxbJFURQrjZgWpcjrNRBSaRf6FQb7TGwstkqbx",
+        "description": "Sport shoe"
+      }
+    }
+  }
+}
