@@ -1,0 +1,17 @@
+{
+    "721": {
+        "c0f8644a01a6bf5db02f4afe30d604975e63dd274f1098a1738e561d": {
+          "Ketchiz": {
+            "name": "Shoe5",
+            "make": "Ketchi",
+            "color": "Black-Orange",
+            "made_in":"DRC (Congo)",
+            "fabrication_date":"01-01-2020",
+            "serial_number": "QN3jH9QjjHY8",
+            "blockchain_network":"Cardano",
+            "image": "ipfs://Qma3XjeaVBJtRKHsBeXNU3Uzv94LKz546BPHqyscicqKmQ",
+            "description": "Sport shoe"
+          }
+        }
+    }
+}
