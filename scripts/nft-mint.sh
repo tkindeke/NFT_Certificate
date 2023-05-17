@@ -2,19 +2,20 @@
 #!/bin/bash
 
 #test if jq is installed
-test_json=$(echo "{ }" | jq)
-if [ "$test_json" != "{}" ]; then
+test_jq=$(echo "{ }" | jq)
+if [ "$test_jq" != "{}" ]; then
         echo "jq not installed"
         exit 1
 fi
 
-declare -a assetsToMint=("iNUD9hTaSL5Z" "CkicQ2XggpB6" "W2ceXZ62bDoM" "EyP4DUk6W5K2" "QN3jH9QjjHY8")
 tokenAmount="1"
 output=54385626
 policyID=$(cat policy/policyID)
 storeAddress=$(cat addr/store.addr)
 treasuryAddress=$(cat addr/treasury.addr)
 policyScript="policy/mintPolicy.plutus"
+metadataPath="assets/metadata/*.json"
+testMagic=2
 
 function mintAsset ()
 {
@@ -30,31 +31,36 @@ function mintAsset ()
     --protocol-params-file protocol.json \
     --out-file "transactions/"$1".body" \
     --change-address $storeAddress \
-    --testnet-magic 2
+    --testnet-magic $testMagic
 
-  cardano-cli transaction sign --testnet-magic 2 \
+  cardano-cli transaction sign --testnet-magic $testMagic \
     --signing-key-file "keys/store.skey" \
     --tx-body-file "transactions/"$1".body"\
     --out-file "transactions/"$1".signed"
 
-  cardano-cli transaction submit --testnet-magic 2 \
+  cardano-cli transaction submit --testnet-magic $testMagic \
     --tx-file "transactions/"$1".signed"
+  
+  txid=cardano-cli transaction txid --tx-file "transactions/"$1".signed"
+
+  echo $txid
 }
 
-for ((i=0; i<${#assetsToMint[*]}; i++));do
+for f in $metadataPath;do
 
-  assetName=${assetsToMint[$i]} 
-  assetMetadata="assets/metadata/"$assetName".json"
-  hex_tokenname=$(echo -n $(jq '."721".'$policyID'.Ketchiz.name' $assetMetadata) | xxd -b -ps -c 80 | tr -d '\n')
-  
+  assetName=$(jq '."721".'$policyID'.Ketchiz.name' $f)
+  hex_tokenname=$(echo -n $assetName | xxd -b -ps -c 80 | tr -d '\n')
+
   echo ""
   echo Please provide UTXO to be consumed in your transaction following this format "-> TxHash#TxIx"
   echo ""
-  cardano-cli query utxo --testnet-magic 2 --address $storeAddress
+  cardano-cli query utxo --testnet-magic $testMagic --address $storeAddress
   read utxo;
 
-  mintAsset $assetName $hex_tokenname $assetMetadata
+  mintAsset $assetName $hex_tokenname $f
 
   read -t 60 
 
 done;
+
+echo "assets have been minted successfully!"
