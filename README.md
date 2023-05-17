@@ -20,13 +20,17 @@ In this process, a minting policy script will be running on each transaction to 
 
 ***Transaction metadata*** <br/><br/>
 The script will embed inside the transaction a metada file containing the minting asset's details
-![image](https://github.com/tkindeke/NFT_Certificate/assets/108430505/48693dd8-7f1a-4da7-b893-9ed7286e8b6f)
+
+![image](https://github.com/tkindeke/nft_certificate/assets/108430505/59f9492f-c44a-481b-85d8-6303a1bb4ec6)
+
 
 ***Premint UTXO model*** <br/><br/>
 In this model we can see that the minting transaction is taking as input, an UTXO (*from the store wallet*) and a minting policy script to generate two outputs.
 One of the outputs is the change (value from wallet - transaction fee) that goes back to the store wallet and the other one is the minted asset that is sent to the treasury.
 
-![image](https://github.com/tkindeke/NFT_Certificate/assets/108430505/ec2d7087-c20f-46bd-9e22-81666b8418fb)
+![image](https://github.com/tkindeke/nft_certificate/assets/108430505/502047fb-3081-4be4-a71d-72069179edfd)
+
+
 
 
 
