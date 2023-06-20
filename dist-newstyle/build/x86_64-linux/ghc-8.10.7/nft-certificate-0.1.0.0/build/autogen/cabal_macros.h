@@ -180,6 +180,16 @@
   (major1) == 1 && (major2) <  2 || \
   (major1) == 1 && (major2) == 2 && (minor) <= 4)
 #endif /* MIN_VERSION_text */
+/* package utf8-string-1.0.2 */
+#ifndef VERSION_utf8_string
+#define VERSION_utf8_string "1.0.2"
+#endif /* VERSION_utf8_string */
+#ifndef MIN_VERSION_utf8_string
+#define MIN_VERSION_utf8_string(major1,major2,minor) (\
+  (major1) <  1 || \
+  (major1) == 1 && (major2) <  0 || \
+  (major1) == 1 && (major2) == 0 && (minor) <= 2)
+#endif /* MIN_VERSION_utf8_string */
 
 /* tool gcc-11 */
 #ifndef TOOL_VERSION_gcc

@@ -1,99 +1,130 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 
 module Premint where
 
-import           Cardano.Api                    (PlutusScript, PlutusScriptV2,
-                                                 writeFileTextEnvelope)
-import           Cardano.Api.Shelley            (PlutusScript (..),
-                                                 ScriptDataJsonSchema (ScriptDataJsonDetailedSchema),
-                                                 fromPlutusData,
-                                                 scriptDataToJson)
-import           Codec.Serialise
-import           Data.Aeson                     as A
-import qualified Data.ByteString.Lazy           as LBS
-import qualified Data.ByteString.Short          as SBS
-import           Data.Functor                   (void)
-import           Ledger                         hiding (singleton)
-import           Ledger.Constraints             as Constraints
-import qualified Plutus.Script.Utils.V2.Scripts as Scripts
-import           Plutus.V1.Ledger.Address       as V1Address
-import           Plutus.V2.Ledger.Api
-import           PlutusTx                       (Data (..))
-import qualified PlutusTx
-import qualified PlutusTx.Builtins              as Builtins
-import           PlutusTx.Prelude               hiding (Semigroup (..), unless)
-import           Prelude                        (FilePath, IO, Semigroup (..),
-                                                 String, show)
+import           Cardano.Api                     (PlutusScript, PlutusScriptV2,
+                                                  writeFileTextEnvelope)
+import           Cardano.Api.Shelley             (PlutusScript (..),
+                                                  ScriptDataJsonSchema (ScriptDataJsonDetailedSchema),
+                                                  fromPlutusData,
+                                                  scriptDataToJson)
+import           Codec.Serialise                 (serialise)
 
+import           Data.Aeson                      as A
+import qualified Data.ByteString.Lazy            as LBS
+import qualified Data.ByteString.Short           as SBS
+import           Data.Functor                    (void)
+import qualified Plutus.Script.Utils.V2.Contexts as C (ScriptContext (scriptContextTxInfo),
+                                                       TxInfo, TxOut,
+                                                       ownCurrencySymbol,
+                                                       pubKeyOutput, txInfoMint,
+                                                       txInfoOutputs,
+                                                       txInfoValidRange,
+                                                       txOutAddress, txSignedBy)
+import qualified Plutus.Script.Utils.V2.Scripts  as Scripts ()
+import           Plutus.V1.Ledger.Address        as V1Address (addressCredential)
+import           Plutus.V1.Ledger.Interval
+import           Plutus.V1.Ledger.Scripts
+import           Plutus.V1.Ledger.Value
+import           Plutus.V2.Ledger.Api            as PlutusV2 (BuiltinData,
+                                                              Credential (PubKeyCredential),
+                                                              Data (B),
+                                                              POSIXTime,
+                                                              PubKeyHash (PubKeyHash),
+                                                              UnsafeFromData,
+                                                              getPubKeyHash,
+                                                              toBuiltinData,
+                                                              toData,
+                                                              unsafeFromBuiltinData)
+import           PlutusTx                        (ToData, applyCode, compile,
+                                                  liftCode, makeLift)
+import qualified PlutusTx.Builtins               as Builtins (BuiltinByteString,
+                                                              mkB, toBuiltin)
+import           PlutusTx.Builtins.Class         (FromBuiltin (fromBuiltin),
+                                                  stringToBuiltinByteString)
+import qualified PlutusTx.Builtins.Internal      as BI ()
+import           PlutusTx.Prelude                (Bool (False, True), Integer,
+                                                  Maybe (Just, Nothing), check,
+                                                  decodeUtf8, head, isJust,
+                                                  length, ($), (&&), (-), (.),
+                                                  (==), (||))
+import           PlutusTx.Trace                  (traceIfFalse)
+import           Prelude                         as P (FilePath, IO)
+import           Utilities
+
+data PremintParams = PremintParams
+    { store    :: PubKeyHash
+    , treasury :: PubKeyHash
+    , deadline:: POSIXTime
+    }
+makeLift ''PremintParams
 
 {-# INLINABLE mkMintPolicy #-}
-mkMintPolicy:: BuiltinData -> BuiltinData -> ()
-mkMintPolicy _ _ = ()
-    -- check that store wallet pubkeyhash is running transaction
-    -- check that transaction has a dead line (time range)
-    -- check that nft has not yet been minted (uniqueness), serial number as parameter
-    -- check that you're only minting one asset per transaction
-    -- check that datum is equal to redeemer
+mkMintPolicy:: PremintParams -> Bool -> C.ScriptContext -> Bool
+mkMintPolicy params isMint sContext =
+      if isMint then
+        traceIfFalse "Failed pubKeyHash validation." (checkSignature (store params)) &&
+        traceIfFalse "Failed max mint amount validation." (checkAssetAmount 1) &&
+        traceIfFalse "Failed transaction time range validation." checkTransactionDeadline &&
+        traceIfFalse "Failed output address validation." checkOutputPubKeyHashes
+      else
+        traceIfFalse "Failed pubKeyHash validation." (checkSignature (treasury params))  &&
+        traceIfFalse "Failed burn amount validation." (checkAssetAmount (-1))
+      where
+        txInfo :: C.TxInfo
+        txInfo = C.scriptContextTxInfo sContext
 
-mintPolicy:: MintingPolicy
-mintPolicy = mkMintingPolicyScript $$(PlutusTx.compile [|| mkMintPolicy ||])
+        txOutputs::[C.TxOut]
+        txOutputs = C.txInfoOutputs txInfo
 
-mintPolicySBS :: SBS.ShortByteString
-mintPolicySBS = SBS.toShort . LBS.toStrict $ serialise mintPolicy
+        -- check that transaction is being signed by pubkeyhash
+        checkSignature :: PubKeyHash -> Bool
+        checkSignature = C.txSignedBy txInfo
 
-serialisedPolicy :: PlutusScript PlutusScriptV2
-serialisedPolicy = PlutusScriptSerialised mintPolicySBS
+        -- check asset amount
+        checkAssetAmount :: Integer -> Bool
+        checkAssetAmount amount =
+          case flattenValue (C.txInfoMint txInfo) of
+            [(cs, _, amt)] -> cs == C.ownCurrencySymbol sContext && amt == amount
+            _              -> False
 
-saveMintPolicy :: IO ()
-saveMintPolicy = void $ writeFileTextEnvelope  "policy/mintPolicy.plutus" Nothing serialisedPolicy
+        -- check transaction time range
+        checkTransactionDeadline:: Bool
+        checkTransactionDeadline = contains (to $ deadline params) (C.txInfoValidRange txInfo)
 
-
--- mintPolicyToPlutusScript :: () -> IO()
--- mintPolicyToPlutusScript mp = _
---     where
---         mintPolicy:: MintingPolicy
---         mintPolicy = mkMintingPolicyScript $$(PlutusTx.compile [|| mp ||])
-
---         mintPolicyToSBS :: MintingPolicy -> SBS.ShortByteString
---         mintPolicyToSBS mp = SBS.toShort . LBS.toStrict $ serialise mp
-
---         serialiseToPlutusScript :: SBS.ShortByteString -> PlutusScript PlutusScriptV2
---         serialiseToPlutusScript sbs = PlutusScriptSerialised sbs
-
-
--- {-# INLINABLE alwaysSucceeds #-}
--- alwaysSucceeds :: BuiltinData -> BuiltinData -> BuiltinData -> ()
--- alwaysSucceeds _ _ _ = ()
-
--- validator :: Validator
--- validator = mkValidatorScript $$(PlutusTx.compile [|| alwaysSucceeds ||])
+        -- check transaction outputs
+        checkOutputPubKeyHashes :: Bool
+        checkOutputPubKeyHashes = length [x | x <- txOutputs, hasPubKeyHash x (treasury params) || hasPubKeyHash x (store params)] == length txOutputs
 
 
--- -- valHash :: Ledger.ValidatorHash
--- -- valHash = Scripts.validatorHash validator
--- -- scrAddress :: V1Address.Address
--- -- scrAddress = V1Address.scriptHashAddress valHash
+{-# INLINABLE hasPubKeyHash #-}
+hasPubKeyHash::C.TxOut -> PubKeyHash -> Bool
+hasPubKeyHash txOut' pkh =
+  case addressCredential $ C.txOutAddress txOut' of
+    PubKeyCredential x -> x == pkh
+    _                  -> False
 
--- -- serialise as short byte string
--- scriptSBS :: SBS.ShortByteString
--- scriptSBS = SBS.toShort . LBS.toStrict $ serialise validator
+{-# INLINABLE  mkWrappedParameterizedMintPolicy #-}
+mkWrappedParameterizedMintPolicy :: PremintParams -> BuiltinData -> BuiltinData -> ()
+mkWrappedParameterizedMintPolicy = wrapPolicy . mkMintPolicy
 
--- -- serialise as serialised script
--- serialisedScript :: PlutusScript PlutusScriptV2
--- serialisedScript = PlutusScriptSerialised scriptSBS
+parameterizedPolicy :: PremintParams -> MintingPolicy
+parameterizedPolicy params = mkMintingPolicyScript ($$(compile [|| mkWrappedParameterizedMintPolicy ||]) `applyCode` liftCode params)
 
--- writeSerialisedScript :: IO ()
--- writeSerialisedScript = void $ writeFileTextEnvelope "validator.plutus" Nothing serialisedScript
+writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
+writeJSON file = LBS.writeFile file . A.encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . toData
 
+serialisedPolicy :: MintingPolicy -> PlutusScript PlutusScriptV2
+serialisedPolicy mintPolicy = PlutusScriptSerialised $ SBS.toShort . LBS.toStrict $ serialise mintPolicy
 
+saveMintPolicy :: MintingPolicy -> IO ()
+saveMintPolicy mintPolicy = void $ writeFileTextEnvelope  "policy/mintPolicy.plutus" Nothing (serialisedPolicy mintPolicy)
 
-writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO()
-writeJSON file = LBS.writeFile file . A.encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . PlutusTx.toData
-
-writeUnit :: IO()
-writeUnit = writeJSON "unit.json" ()
-
-
+writeRedeemerJson :: IO ()
+writeRedeemerJson = writeJSON "./redeemer.json" (True :: Bool)
 

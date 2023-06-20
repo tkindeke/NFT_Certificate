@@ -1,4 +1,6 @@
-// {
+{
+    "ghcSimple.feature.rangeType": false
+} // {
 //     // Add the following to your VS Code settings.json file inside the outer curly braces.
 //     // Make sure each setting ends with a comma!
     
