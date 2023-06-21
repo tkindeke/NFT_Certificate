@@ -34,10 +34,13 @@ One of the outputs is the change (value from wallet - transaction fee) that goes
 ![image](https://github.com/tkindeke/nft_certificate/assets/108430505/5350484a-13bf-4157-b9d6-0fb17c47d81e)
 
 You'll find the .hs file holding the minting policy logic under the source folder. This minting policy is parameterized, and takes as a parameter an object containing the store wallet pubkeyhash, the treasury pubkeyhash and a deadline posixtime value.
-the store and treasury pubkeyhashes are used to validate signatures, while the deadline parameter helps to make sure that the minting happens before a certain time.
-Under the solution folder, you should also find the nft-mint.sh shell script. this script contains the transaction contruction to trigger the mint.
+The store and treasury pubkeyhashes are used to validate signatures, while the deadline parameter helps to make sure that the minting happens before a certain time.
+Under the solution folder, you should also find the nft-mint.sh shell script. This script contains the transaction contruction to trigger the mint.
 
-here below are the instructions to test the premint:
+Here below are the instructions to test the premint:
+> **Note:**<br/>
+*You should run the cardano node before testing.*
+<br/><br/>
 1. enter GHCi with cabal repl under the root folder
    ![image](https://github.com/tkindeke/nft_certificate/assets/108430505/e1a9e840-915a-4c3b-ad85-94533ea47e3f)
 
