@@ -3,25 +3,28 @@
 module Utilities
   ( wrapValidator
   , wrapPolicy
+  , writeJSON
+  , serialisedValidator
+  , serialisedPolicy
   ) where
 
-import           Cardano.Api          (PlutusScript, PlutusScriptV2,
-                                       writeFileTextEnvelope)
-import           Cardano.Api.Shelley  (PlutusScript (..),
-                                       ScriptDataJsonSchema (ScriptDataJsonDetailedSchema),
-                                       fromPlutusData, scriptDataToJson)
-import           Codec.Serialise      (serialise)
--- import           Data.Aeson            as A
--- import qualified Data.ByteString.Lazy  as LBS
--- import qualified Data.ByteString.Short as SBS
-import           Data.Functor         (void)
-import           Plutus.V2.Ledger.Api (MintingPolicy, ScriptContext,
-                                       UnsafeFromData, toData,
-                                       unsafeFromBuiltinData)
+import           Cardano.Api           (PlutusScript, PlutusScriptV2,
+                                        writeFileTextEnvelope)
+import           Cardano.Api.Shelley   (PlutusScript (..),
+                                        ScriptDataJsonSchema (ScriptDataJsonDetailedSchema),
+                                        fromPlutusData, scriptDataToJson)
+import           Codec.Serialise       (serialise)
+import           Data.Aeson            as A
+import qualified Data.ByteString.Lazy  as LBS
+import qualified Data.ByteString.Short as SBS
+import           Data.Functor          (void)
+import           Plutus.V2.Ledger.Api  (MintingPolicy, ScriptContext,
+                                        UnsafeFromData, Validator, toData,
+                                        unsafeFromBuiltinData)
 import           PlutusTx
-import           PlutusTx.Prelude     (Bool, BuiltinData, Maybe (Nothing),
-                                       check, ($), (.))
-import           Prelude              as P (FilePath, IO)
+import           PlutusTx.Prelude      (Bool, BuiltinData, Maybe (Nothing),
+                                        check, ($), (.))
+import           Prelude               as P (FilePath, IO)
 
 
 {-# INLINABLE wrapValidator #-}
@@ -45,14 +48,11 @@ wrapPolicy f a ctx =
       (unsafeFromBuiltinData a)
       (unsafeFromBuiltinData ctx)
 
--- writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
--- writeJSON file = LBS.writeFile file . A.encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . toData
+writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
+writeJSON file = LBS.writeFile file . A.encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . toData
 
--- -- mintPolicySBS :: MintingPolicy -> SBS.ShortByteString
--- -- mintPolicySBS mintPolicy = SBS.toShort . LBS.toStrict $ serialise mintPolicy
+serialisedValidator :: Validator -> PlutusScript PlutusScriptV2
+serialisedValidator claimValidator = PlutusScriptSerialised $ SBS.toShort . LBS.toStrict $ serialise claimValidator
 
--- serialisedPolicy :: MintingPolicy -> PlutusScript PlutusScriptV2
--- serialisedPolicy mintPolicy = PlutusScriptSerialised $ SBS.toShort . LBS.toStrict $ serialise mintPolicy
-
--- saveMintPolicy :: MintingPolicy -> IO ()
--- saveMintPolicy mintPolicy = void $ writeFileTextEnvelope  "policy/mintPolicy.plutus" Nothing (serialisedPolicy mintPolicy)
+serialisedPolicy :: MintingPolicy -> PlutusScript PlutusScriptV2
+serialisedPolicy mintPolicy = PlutusScriptSerialised $ SBS.toShort . LBS.toStrict $ serialise mintPolicy

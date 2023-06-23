@@ -7,22 +7,12 @@
 
 module Premint where
 
-import           Cardano.Api                     (PlutusScript, PlutusScriptV2,
-                                                  writeFileTextEnvelope)
-import           Cardano.Api.Shelley             (PlutusScript (..),
-                                                  ScriptDataJsonSchema (ScriptDataJsonDetailedSchema),
-                                                  fromPlutusData,
-                                                  scriptDataToJson)
-import           Codec.Serialise                 (serialise)
-
-import           Data.Aeson                      as A
-import qualified Data.ByteString.Lazy            as LBS
-import qualified Data.ByteString.Short           as SBS
+import           Cardano.Api                     (writeFileTextEnvelope)
 import           Data.Functor                    (void)
 import qualified Plutus.Script.Utils.V2.Contexts as C (ScriptContext (scriptContextTxInfo),
                                                        TxInfo, TxOut,
                                                        ownCurrencySymbol,
-                                                       pubKeyOutput, txInfoMint,
+                                                       txInfoMint,
                                                        txInfoOutputs,
                                                        txInfoValidRange,
                                                        txOutAddress, txSignedBy)
@@ -33,28 +23,16 @@ import           Plutus.V1.Ledger.Scripts
 import           Plutus.V1.Ledger.Value
 import           Plutus.V2.Ledger.Api            as PlutusV2 (BuiltinData,
                                                               Credential (PubKeyCredential),
-                                                              Data (B),
                                                               POSIXTime,
-                                                              PubKeyHash (PubKeyHash),
-                                                              UnsafeFromData,
-                                                              getPubKeyHash,
-                                                              toBuiltinData,
-                                                              toData,
-                                                              unsafeFromBuiltinData)
-import           PlutusTx                        (ToData, applyCode, compile,
-                                                  liftCode, makeLift)
-import qualified PlutusTx.Builtins               as Builtins (BuiltinByteString,
-                                                              mkB, toBuiltin)
-import           PlutusTx.Builtins.Class         (FromBuiltin (fromBuiltin),
-                                                  stringToBuiltinByteString)
+                                                              PubKeyHash)
+import           PlutusTx                        (applyCode, compile, liftCode,
+                                                  makeLift)
 import qualified PlutusTx.Builtins.Internal      as BI ()
 import           PlutusTx.Prelude                (Bool (False, True), Integer,
-                                                  Maybe (Just, Nothing), check,
-                                                  decodeUtf8, head, isJust,
-                                                  length, ($), (&&), (-), (.),
-                                                  (==), (||))
+                                                  Maybe (Nothing), length, ($),
+                                                  (&&), (-), (.), (==), (||))
 import           PlutusTx.Trace                  (traceIfFalse)
-import           Prelude                         as P (FilePath, IO)
+import           Prelude                         as P (IO)
 import           Utilities
 
 data PremintParams = PremintParams
@@ -115,12 +93,6 @@ mkWrappedParameterizedMintPolicy = wrapPolicy . mkMintPolicy
 
 parameterizedPolicy :: PremintParams -> MintingPolicy
 parameterizedPolicy params = mkMintingPolicyScript ($$(compile [|| mkWrappedParameterizedMintPolicy ||]) `applyCode` liftCode params)
-
-writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
-writeJSON file = LBS.writeFile file . A.encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . toData
-
-serialisedPolicy :: MintingPolicy -> PlutusScript PlutusScriptV2
-serialisedPolicy mintPolicy = PlutusScriptSerialised $ SBS.toShort . LBS.toStrict $ serialise mintPolicy
 
 saveMintPolicy :: MintingPolicy -> IO ()
 saveMintPolicy mintPolicy = void $ writeFileTextEnvelope  "policy/mintPolicy.plutus" Nothing (serialisedPolicy mintPolicy)
