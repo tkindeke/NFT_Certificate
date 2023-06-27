@@ -6,9 +6,17 @@
 {-# LANGUAGE TemplateHaskell       #-}
 
 module Claim where
-
-import           Cardano.Api                     (writeFileTextEnvelope)
+import qualified Cardano.Api                     as Api (writeFileTextEnvelope)
+import qualified Cardano.Api.Shelley             as Api
+import           Cardano.Ledger.BaseTypes        (Network (..))
+import           Cardano.Ledger.Credential       (Credential (ScriptHashObj),
+                                                  StakeReference (StakeRefNull))
+import           Codec.Serialise                 (Serialise, serialise)
+import qualified Data.ByteString.Char8           as BS8
+import qualified Data.ByteString.Lazy            as BSL
+import qualified Data.ByteString.Short           as BSS
 import           Data.Functor                    (void)
+import qualified Data.Text                       as Text
 import qualified Plutus.Script.Utils.V2.Contexts as C (ScriptContext (scriptContextTxInfo),
                                                        TxInfo, TxOut,
                                                        ownCurrencySymbol,
@@ -16,8 +24,11 @@ import qualified Plutus.Script.Utils.V2.Contexts as C (ScriptContext (scriptCont
                                                        txInfoOutputs,
                                                        txInfoSignatories,
                                                        txOutAddress, txSignedBy)
-import qualified Plutus.Script.Utils.V2.Scripts  as Scripts ()
-import           Plutus.V1.Ledger.Address        as V1Address (addressCredential)
+import qualified Plutus.Script.Utils.V2.Scripts  as Scripts (ValidatorHash,
+                                                             validatorHash)
+import           Plutus.V1.Ledger.Address        as V1Address (Address,
+                                                               addressCredential,
+                                                               scriptHashAddress)
 import           Plutus.V1.Ledger.Scripts
 import           Plutus.V1.Ledger.Value
 import           Plutus.V2.Ledger.Api            as PlutusV2 (BuiltinData,
@@ -30,18 +41,13 @@ import           PlutusTx.Prelude                (Bool (False, True), Integer,
                                                   Maybe (Nothing), length, ($),
                                                   (&&), (.), (==), (||))
 import           PlutusTx.Trace                  (traceIfFalse)
-import           Prelude                         as P (IO)
+import           Prelude                         as P (IO, String)
 import           Utilities
 
-data ClaimParams = ClaimParams
-    { store    :: PubKeyHash
-    , treasury :: PubKeyHash
-    }
-makeLift ''ClaimParams
 
 {-# INLINABLE mkClaimValidator #-}
-mkClaimValidator:: ClaimParams -> Datum -> TokenName -> C.ScriptContext -> Bool
-mkClaimValidator params datum tokename sContext = traceIfFalse "Failed pubKeyHash validation." (checkSignature (store params) && checkSignature (treasury params)) &&
+mkClaimValidator:: PubKeyHash -> PubKeyHash -> TokenName -> C.ScriptContext -> Bool
+mkClaimValidator storePkh treasuryPkh tokename sContext = traceIfFalse "Failed pubKeyHash validation." (checkSignature storePkh && checkSignature treasuryPkh) &&
                                                 traceIfFalse "Failed max mint amount validation." (checkAssetAmount 1) &&
                                                 traceIfFalse "Failed signatories validation." checkSignatories
       where
@@ -61,19 +67,42 @@ mkClaimValidator params datum tokename sContext = traceIfFalse "Failed pubKeyHas
 
         -- check transaction signatories
         checkSignatories :: Bool
-        checkSignatories = length [x | x <- C.txInfoSignatories txInfo, x == treasury params || x == store params] == 2
+        checkSignatories = length [x | x <- C.txInfoSignatories txInfo, x == treasuryPkh || x == storePkh] == 2
 
 
 {-# INLINABLE  mkWrappedParameterizedValidator #-}
-mkWrappedParameterizedValidator:: ClaimParams -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+mkWrappedParameterizedValidator:: PubKeyHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
 mkWrappedParameterizedValidator = wrapValidator . mkClaimValidator
 
-parameterizedValidator :: ClaimParams -> Validator
-parameterizedValidator params = mkValidatorScript ($$(compile [|| mkWrappedParameterizedValidator ||]) `applyCode` liftCode params)
+parameterizedValidator :: PubKeyHash -> Validator
+parameterizedValidator pkh = mkValidatorScript ($$(compile [|| mkWrappedParameterizedValidator ||]) `applyCode` liftCode pkh)
 
+
+-- Serialization
 saveClaimValidator :: Validator -> IO ()
-saveClaimValidator claimValidator = void $ writeFileTextEnvelope  "validator/claimValidator.plutus" Nothing (serialisedValidator claimValidator)
+saveClaimValidator claimValidator = void $ Api.writeFileTextEnvelope  "./validator/claimValidator.plutus" Nothing (serialisedValidator claimValidator)
 
 writeRedeemerJson :: IO ()
 writeRedeemerJson = writeJSON "./claimRedeemer.json" (True :: Bool)
+
+hashScript :: Api.PlutusScript Api.PlutusScriptV2 -> Api.ScriptHash
+hashScript = Api.hashScript . Api.PlutusScript Api.PlutusScriptV2
+
+validatorHash :: Validator -> Api.ScriptHash
+validatorHash = hashScript . validatorToScript
+
+validatorToScript :: Validator -> Api.PlutusScript Api.PlutusScriptV2
+validatorToScript = serializableToScript
+
+serializableToScript :: Serialise a => a -> Api.PlutusScript Api.PlutusScriptV2
+serializableToScript = Api.PlutusScriptSerialised . BSS.toShort . BSL.toStrict . serialise
+
+validatorAddressBech32 :: Network -> Validator -> String
+validatorAddressBech32 network v =
+    Text.unpack $
+    Api.serialiseToBech32 $
+    Api.ShelleyAddress
+      network
+      (ScriptHashObj $ Api.toShelleyScriptHash $ validatorHash v)
+      StakeRefNull
 
