@@ -50,6 +50,16 @@
   (major1) == 1 && (major2) <  35 || \
   (major1) == 1 && (major2) == 35 && (minor) <= 4)
 #endif /* MIN_VERSION_cardano_api */
+/* package cardano-ledger-core-0.1.0.0 */
+#ifndef VERSION_cardano_ledger_core
+#define VERSION_cardano_ledger_core "0.1.0.0"
+#endif /* VERSION_cardano_ledger_core */
+#ifndef MIN_VERSION_cardano_ledger_core
+#define MIN_VERSION_cardano_ledger_core(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  1 || \
+  (major1) == 0 && (major2) == 1 && (minor) <= 0)
+#endif /* MIN_VERSION_cardano_ledger_core */
 /* package containers-0.6.5.1 */
 #ifndef VERSION_containers
 #define VERSION_containers "0.6.5.1"

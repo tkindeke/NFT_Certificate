@@ -49,10 +49,10 @@ extra-source-files: CHANGELOG.md
 
 library
     -- Modules exported by the library.
-    exposed-modules:  Premint
+    exposed-modules:  Premint, Claim
 
     -- Modules included in this library but not exported.
-    -- other-modules: Utilities
+    other-modules: Utilities
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -76,6 +76,7 @@ library
                       , lens -any
                       , serialise
                       , utf8-string -any
+                      , cardano-ledger-core -any
 
     -- Directories containing source files.
     hs-source-dirs:   src

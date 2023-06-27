@@ -22,22 +22,23 @@ import           Plutus.V1.Ledger.Interval
 import           Plutus.V1.Ledger.Scripts
 import           Plutus.V1.Ledger.Value
 import           Plutus.V2.Ledger.Api            as PlutusV2 (BuiltinData,
-                                                              Credential (PubKeyCredential),
+                                                              Credential (PubKeyCredential, ScriptCredential),
                                                               POSIXTime,
                                                               PubKeyHash)
 import           PlutusTx                        (applyCode, compile, liftCode,
                                                   makeLift)
 import qualified PlutusTx.Builtins.Internal      as BI ()
 import           PlutusTx.Prelude                (Bool (False, True), Integer,
-                                                  Maybe (Nothing), length, ($),
-                                                  (&&), (-), (.), (==), (||))
+                                                  Maybe (Nothing), decodeUtf8,
+                                                  length, ($), (&&), (-), (.),
+                                                  (==), (||))
 import           PlutusTx.Trace                  (traceIfFalse)
 import           Prelude                         as P (IO)
 import           Utilities
 
 data PremintParams = PremintParams
     { store    :: PubKeyHash
-    , treasury :: PubKeyHash
+    , treasury :: ValidatorHash
     , deadline:: POSIXTime
     }
 makeLift ''PremintParams
@@ -51,7 +52,7 @@ mkMintPolicy params isMint sContext =
         traceIfFalse "Failed transaction time range validation." checkTransactionDeadline &&
         traceIfFalse "Failed output address validation." checkOutputPubKeyHashes
       else
-        traceIfFalse "Failed pubKeyHash validation." (checkSignature (treasury params))  &&
+        traceIfFalse "Failed pubKeyHash validation." (checkSignature (store params))  &&
         traceIfFalse "Failed burn amount validation." (checkAssetAmount (-1))
       where
         txInfo :: C.TxInfo
@@ -77,7 +78,7 @@ mkMintPolicy params isMint sContext =
 
         -- check transaction outputs
         checkOutputPubKeyHashes :: Bool
-        checkOutputPubKeyHashes = length [x | x <- txOutputs, hasPubKeyHash x (treasury params) || hasPubKeyHash x (store params)] == length txOutputs
+        checkOutputPubKeyHashes = length [x | x <- txOutputs, hasScriptHash x (treasury params) || hasPubKeyHash x (store params)] == length txOutputs
 
 
 {-# INLINABLE hasPubKeyHash #-}
@@ -85,6 +86,13 @@ hasPubKeyHash::C.TxOut -> PubKeyHash -> Bool
 hasPubKeyHash txOut' pkh =
   case addressCredential $ C.txOutAddress txOut' of
     PubKeyCredential x -> x == pkh
+    _                  -> False
+
+{-# INLINABLE hasScriptHash #-}
+hasScriptHash::C.TxOut -> ValidatorHash -> Bool
+hasScriptHash txOut' valHash =
+  case addressCredential $ C.txOutAddress txOut' of
+    ScriptCredential x -> x == valHash
     _                  -> False
 
 {-# INLINABLE  mkWrappedParameterizedMintPolicy #-}
